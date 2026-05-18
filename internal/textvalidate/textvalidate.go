@@ -43,6 +43,16 @@ var (
 	// ErrInvalidCompactText reports that a compact text value is malformed.
 	ErrInvalidCompactText = errors.New("compact text is invalid")
 
+	// ErrInvalidSingleLineText reports that a single-line text value is
+	// malformed.
+	ErrInvalidSingleLineText = errors.New("single-line text is invalid")
+
+	// ErrEmptyTokenText reports that a token text value is empty.
+	ErrEmptyTokenText = errors.New("token text is empty")
+
+	// ErrInvalidTokenText reports that a token text value is malformed.
+	ErrInvalidTokenText = errors.New("token text is invalid")
+
 	// ErrEmptyEnvName reports that an environment variable name is empty.
 	ErrEmptyEnvName = errors.New("environment name is empty")
 

@@ -95,17 +95,3 @@ func validateCommandCompactText(domainErr error, field string, raw string, maxLe
 
 	return nil
 }
-
-// cloneStringMap returns a detached copy of values.
-func cloneStringMap(values map[string]string) map[string]string {
-	if values == nil {
-		return nil
-	}
-
-	out := make(map[string]string, len(values))
-	for key, value := range values {
-		out[key] = value
-	}
-
-	return out
-}

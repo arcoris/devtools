@@ -42,6 +42,12 @@ var (
 
 	// ErrInvalidCompactText reports that a compact text value is malformed.
 	ErrInvalidCompactText = errors.New("compact text is invalid")
+
+	// ErrEmptyEnvName reports that an environment variable name is empty.
+	ErrEmptyEnvName = errors.New("environment name is empty")
+
+	// ErrInvalidEnvName reports that an environment variable name is malformed.
+	ErrInvalidEnvName = errors.New("environment name is invalid")
 )
 
 // ValidateKebabSegment validates one ASCII kebab-case identifier segment.
@@ -163,6 +169,11 @@ func IsASCII(r rune) bool {
 // IsASCIILowerLetter reports whether ch is an ASCII lowercase letter.
 func IsASCIILowerLetter(ch byte) bool {
 	return ch >= 'a' && ch <= 'z'
+}
+
+// IsASCIIUpperLetter reports whether ch is an ASCII uppercase letter.
+func IsASCIIUpperLetter(ch byte) bool {
+	return ch >= 'A' && ch <= 'Z'
 }
 
 // IsASCIIDigit reports whether ch is an ASCII digit.

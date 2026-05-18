@@ -16,6 +16,7 @@ package textvalidate
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 )
 
@@ -480,6 +481,35 @@ func TestIsASCIILowerLetter(t *testing.T) {
 
 			if got := IsASCIILowerLetter(tt.ch); got != tt.want {
 				t.Fatalf("IsASCIILowerLetter(%q) = %v, want %v", tt.ch, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsASCIIUpperLetter(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		ch   byte
+		want bool
+	}{
+		{ch: 'A', want: true},
+		{ch: 'M', want: true},
+		{ch: 'Z', want: true},
+		{ch: 'a', want: false},
+		{ch: 'z', want: false},
+		{ch: '0', want: false},
+		{ch: '_', want: false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(fmt.Sprintf("%q", tt.ch), func(t *testing.T) {
+			t.Parallel()
+
+			if got := IsASCIIUpperLetter(tt.ch); got != tt.want {
+				t.Fatalf("IsASCIIUpperLetter(%q) = %v, want %v", tt.ch, got, tt.want)
 			}
 		})
 	}

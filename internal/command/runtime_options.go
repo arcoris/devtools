@@ -28,25 +28,43 @@ type RuntimeOptions struct {
 type RuntimeOptionsSpec struct {
 	// RecoverPanics controls whether handler panics are converted into failed
 	// Results.
-	RecoverPanics bool
+	//
+	// Nil means DefaultRuntimeOptions behavior.
+	RecoverPanics *bool
 
 	// IncludePanicStack controls whether recovered panic messages include
 	// debug.Stack output.
-	IncludePanicStack bool
+	//
+	// Nil means DefaultRuntimeOptions behavior.
+	IncludePanicStack *bool
 
 	// SuppressEvents disables lifecycle event emission even when EventSink is
 	// configured.
-	SuppressEvents bool
+	//
+	// Nil means DefaultRuntimeOptions behavior.
+	SuppressEvents *bool
 }
 
 // NewRuntimeOptions validates spec and returns RuntimeOptions.
 func NewRuntimeOptions(spec RuntimeOptionsSpec) (RuntimeOptions, error) {
-	options := RuntimeOptions{
-		configured:        true,
-		recoverPanics:     spec.RecoverPanics,
-		includePanicStack: spec.IncludePanicStack,
-		suppressEvents:    spec.SuppressEvents,
+	options := DefaultRuntimeOptions()
+
+	if spec.RecoverPanics != nil {
+		options.recoverPanics = *spec.RecoverPanics
+		if !options.recoverPanics {
+			options.includePanicStack = false
+		}
 	}
+
+	if spec.IncludePanicStack != nil {
+		options.includePanicStack = *spec.IncludePanicStack
+	}
+
+	if spec.SuppressEvents != nil {
+		options.suppressEvents = *spec.SuppressEvents
+	}
+
+	options.configured = true
 
 	if err := options.Validate(); err != nil {
 		return RuntimeOptions{}, err

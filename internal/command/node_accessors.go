@@ -45,32 +45,122 @@ func (node Node) Aliases() []string {
 
 // Short returns the short human-facing node description.
 func (node Node) Short() string {
-	return node.short
+	return node.documentation.Summary()
 }
 
 // Long returns the long human-facing node description.
 func (node Node) Long() string {
-	return node.long
+	return node.documentation.Description()
 }
 
 // Example returns human-facing usage examples.
 func (node Node) Example() string {
-	return node.example
+	return nodeExampleFromDocumentation(node.documentation)
 }
 
 // Hidden reports whether adapters should hide this node from default help.
 func (node Node) Hidden() bool {
-	return node.hidden
+	return !node.visibility.IsDiscoverableByDefault()
 }
 
 // Deprecated returns the optional deprecation message.
 func (node Node) Deprecated() string {
-	return node.deprecated
+	deprecation, ok := node.metadata.Deprecation()
+	if !ok {
+		return ""
+	}
+
+	return deprecation.Message()
 }
 
 // IsDeprecated reports whether the node has a deprecation message.
 func (node Node) IsDeprecated() bool {
-	return node.deprecated != ""
+	return node.metadata.IsDeprecated()
+}
+
+// Documentation returns structured human-facing node documentation.
+func (node Node) Documentation() Documentation {
+	return node.documentation
+}
+
+// Usage returns structured usage syntax and whether it is set.
+func (node Node) Usage() (Usage, bool) {
+	return node.documentation.Usage()
+}
+
+// UsageOrZero returns structured usage syntax or the zero Usage value.
+func (node Node) UsageOrZero() Usage {
+	usage, _ := node.Usage()
+
+	return usage
+}
+
+// Metadata returns machine-facing command metadata.
+func (node Node) Metadata() Metadata {
+	return node.metadata
+}
+
+// Visibility returns node exposure policy.
+func (node Node) Visibility() Visibility {
+	return node.visibility
+}
+
+// IsVisibleByDefault reports whether default help/docs/discovery should expose
+// this node.
+func (node Node) IsVisibleByDefault() bool {
+	return node.visibility.IsDiscoverableByDefault()
+}
+
+// Group returns the optional group and whether it is set.
+func (node Node) Group() (Group, bool) {
+	if node.group.IsZero() {
+		return "", false
+	}
+
+	return node.group, true
+}
+
+// HasGroup reports whether the node has a group.
+func (node Node) HasGroup() bool {
+	_, ok := node.Group()
+
+	return ok
+}
+
+// Topics returns detached topic values.
+func (node Node) Topics() []Topic {
+	return cloneTopics(node.topics)
+}
+
+// HasTopics reports whether the node has one or more topics.
+func (node Node) HasTopics() bool {
+	return len(node.topics) > 0
+}
+
+// Binding returns the node input binding declaration.
+func (node Node) Binding() Binding {
+	return node.binding
+}
+
+// HasBinding reports whether the node declares options or arguments.
+func (node Node) HasBinding() bool {
+	return !node.binding.IsZero()
+}
+
+// RuntimeHandler returns the canonical runtime handler and whether it is set.
+func (node Node) RuntimeHandler() (RuntimeHandler, bool) {
+	if node.handler == nil {
+		return nil, false
+	}
+
+	return node.handler, true
+}
+
+// HasRuntimeHandler reports whether the node has canonical executable behavior.
+func (node Node) HasRuntimeHandler() bool {
+	_, ok := node.RuntimeHandler()
+
+	return ok
 }
 
 // IsRoot reports whether the node is the command-tree root.

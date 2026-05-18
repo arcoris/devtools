@@ -40,6 +40,10 @@ func (node Node) validateSelf() error {
 		return err
 	}
 
+	if err := node.validateDomainMetadata(); err != nil {
+		return err
+	}
+
 	switch node.kind {
 	case NodeRoot:
 		return node.validateRoot()
@@ -50,6 +54,50 @@ func (node Node) validateSelf() error {
 	default:
 		return fmt.Errorf("%w: unsupported kind %q", ErrInvalidNode, node.kind)
 	}
+}
+
+// validateDomainMetadata validates node metadata that is independent from tree
+// identity and sibling relationships.
+func (node Node) validateDomainMetadata() error {
+	if err := node.documentation.Validate(); err != nil {
+		return fmt.Errorf("%w: invalid documentation: %w", ErrInvalidNode, err)
+	}
+
+	if err := node.metadata.Validate(); err != nil {
+		return fmt.Errorf("%w: invalid metadata: %w", ErrInvalidNode, err)
+	}
+
+	if err := node.visibility.Validate(); err != nil {
+		return fmt.Errorf("%w: invalid visibility: %w", ErrInvalidNode, err)
+	}
+
+	if !node.group.IsZero() {
+		if err := node.group.Validate(); err != nil {
+			return fmt.Errorf("%w: invalid group %q: %w", ErrInvalidNode, node.group, err)
+		}
+	}
+
+	for index, topic := range node.topics {
+		if err := topic.Validate(); err != nil {
+			return fmt.Errorf("%w: invalid topic %d %q: %w", ErrInvalidNode, index, topic, err)
+		}
+
+		for previous := 0; previous < index; previous++ {
+			if node.topics[previous] == topic {
+				return fmt.Errorf("%w: duplicate topic %q", ErrInvalidNode, topic)
+			}
+		}
+	}
+
+	if err := node.binding.Validate(); err != nil {
+		return fmt.Errorf("%w: invalid binding: %w", ErrInvalidNode, err)
+	}
+
+	if node.handler != nil && node.kind != NodeCommand {
+		return fmt.Errorf("%w: only command nodes may declare a runtime handler", ErrInvalidNode)
+	}
+
+	return nil
 }
 
 // validateRoot validates root-node invariants.

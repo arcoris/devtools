@@ -30,17 +30,23 @@ var (
 	ErrInvalidActionResult = errors.New("command action result is invalid")
 )
 
-// Action executes a command node.
+// Action executes a command node as a compatibility declaration adapter.
 //
 // Action is framework-neutral. It MUST NOT know about Cobra, pflag, os.Args,
 // process exit codes, terminal rendering, or any specific CLI adapter.
 //
-// The command execution pipeline is intentionally split:
+// RuntimeHandler, RuntimeRequest, and Result are the canonical command
+// lifecycle execution contract. Action remains useful for older declarations
+// and very small tests, but it intentionally has no independent lifecycle,
+// event, cancellation-status, or artifact model. Use RuntimeHandlerFromAction
+// when an Action must participate in the canonical Runtime pipeline.
+//
+// The compatibility action layer is intentionally split:
 //
 //   - Node describes command-tree structure;
-//   - Action describes executable behavior;
-//   - ActionRequest describes one invocation;
-//   - ActionResult describes structured success or skip output;
+//   - Action describes lower-level executable behavior;
+//   - ActionRequest describes one compatibility invocation;
+//   - ActionResult adapts to Result for lifecycle output;
 //   - errors describe failures.
 //
 // Domain packages such as check, bench, profile, trace, or perf should be
@@ -84,11 +90,11 @@ func NoopAction() Action {
 }
 
 // ExecuteAction validates request, executes action, normalizes the returned
-// result, and validates the normalized result.
+// compatibility result, and validates the normalized result.
 //
-// ExecuteAction is the canonical low-level action execution helper. Higher
-// lifecycle code can wrap this function with requirement checks, event
-// emission, telemetry, audit records, and output handling.
+// ExecuteAction does not emit lifecycle events, recover panics, bind options,
+// or normalize a final Result. Runtime.Execute owns those canonical lifecycle
+// semantics. Use RuntimeHandlerFromAction to run an Action through Runtime.
 func ExecuteAction(ctx context.Context, action Action, request ActionRequest) (ActionResult, error) {
 	if ctx == nil {
 		ctx = context.Background()

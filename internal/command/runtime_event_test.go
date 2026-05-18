@@ -17,6 +17,7 @@ package command
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 )
 
@@ -46,6 +47,64 @@ func TestRuntimeEventCollector(t *testing.T) {
 
 	if got, want := collector.Len(), 0; got != want {
 		t.Fatalf("Len() after Reset() = %d, want %d", got, want)
+	}
+}
+
+// TestRuntimeEventCollectorNil verifies nil collector behavior is deterministic.
+func TestRuntimeEventCollectorNil(t *testing.T) {
+	t.Parallel()
+
+	var collector *RuntimeEventCollector
+	event := MustSimpleEvent(EventKindDiagnostic, "diagnostic")
+
+	if err := collector.RecordEvent(context.Background(), event); err == nil {
+		t.Fatalf("RecordEvent(nil collector) returned nil error")
+	} else if !errors.Is(err, ErrInvalidRuntime) {
+		t.Fatalf("RecordEvent(nil collector) error = %v, want ErrInvalidRuntime", err)
+	}
+
+	if got := collector.Events(); got != nil {
+		t.Fatalf("Events(nil collector) = %#v, want nil", got)
+	}
+
+	if got := collector.Len(); got != 0 {
+		t.Fatalf("Len(nil collector) = %d, want 0", got)
+	}
+
+	collector.Reset()
+}
+
+// TestRuntimeEventCollectorConcurrentRecord verifies the collector can be used
+// by concurrent runtime observers without racing.
+func TestRuntimeEventCollectorConcurrentRecord(t *testing.T) {
+	t.Parallel()
+
+	collector := &RuntimeEventCollector{}
+	event := MustSimpleEvent(EventKindDiagnostic, "diagnostic")
+
+	const goroutines = 16
+	const perGoroutine = 32
+
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+
+			for j := 0; j < perGoroutine; j++ {
+				if err := collector.RecordEvent(context.Background(), event); err != nil {
+					t.Errorf("RecordEvent() returned unexpected error: %v", err)
+					return
+				}
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if got, want := collector.Len(), goroutines*perGoroutine; got != want {
+		t.Fatalf("Len() = %d, want %d", got, want)
 	}
 }
 

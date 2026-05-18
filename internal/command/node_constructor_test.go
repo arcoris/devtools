@@ -165,6 +165,85 @@ func TestNewNodeStoresMetadata(t *testing.T) {
 	if !node.IsDeprecated() {
 		t.Fatalf("IsDeprecated() = false, want true")
 	}
+
+	if got, want := node.Documentation().Summary(), "Run checks"; got != want {
+		t.Fatalf("Documentation().Summary() = %q, want %q", got, want)
+	}
+
+	if got, want := node.Visibility(), VisibilityHidden; got != want {
+		t.Fatalf("Visibility() = %q, want %q", got, want)
+	}
+
+	if !node.Metadata().IsDeprecated() {
+		t.Fatalf("Metadata().IsDeprecated() = false, want true")
+	}
+}
+
+func TestNewNodeStoresStructuredDomainFields(t *testing.T) {
+	t.Parallel()
+
+	binding := runtimeTestBinding()
+	handler := runtimeTestOKHandler()
+
+	node := MustNode(NodeSpec{
+		Kind: NodeCommand,
+		ID:   MustID("bench.run"),
+		Path: MustPath("bench", "run"),
+		Use:  "run",
+		Documentation: MustDocumentation(DocumentationSpec{
+			Summary: "Run benchmarks",
+			Usage:   MustUsage(UsageSpec{Syntax: "bench run [flags] <suite>"}),
+		}),
+		Metadata: MustMetadata(MetadataSpec{
+			Owner: "devtools",
+			Deprecation: &DeprecationSpec{
+				Message: "use bench execute",
+			},
+		}),
+		Visibility: VisibilityInternal,
+		Group:      MustGroup("benchmark"),
+		Topics:     []Topic{MustTopic("benchmark.run")},
+		Binding:    binding,
+		Handler:    handler,
+	})
+
+	if got, want := node.Short(), "Run benchmarks"; got != want {
+		t.Fatalf("Short() = %q, want %q", got, want)
+	}
+
+	if usage, ok := node.Usage(); !ok || usage.String() != "bench run [flags] <suite>" {
+		t.Fatalf("Usage() = %q, %v; want syntax", usage, ok)
+	}
+
+	if got, want := node.Deprecated(), "use bench execute"; got != want {
+		t.Fatalf("Deprecated() = %q, want %q", got, want)
+	}
+
+	if got, want := node.Visibility(), VisibilityInternal; got != want {
+		t.Fatalf("Visibility() = %q, want %q", got, want)
+	}
+
+	if group, ok := node.Group(); !ok || group != MustGroup("benchmark") {
+		t.Fatalf("Group() = %q, %v; want benchmark", group, ok)
+	}
+
+	topics := node.Topics()
+	topics[0] = MustTopic("changed")
+	if got, want := node.Topics()[0], MustTopic("benchmark.run"); got != want {
+		t.Fatalf("Topics() returned mutable state: got %q, want %q", got, want)
+	}
+
+	if !node.HasBinding() {
+		t.Fatalf("HasBinding() = false, want true")
+	}
+
+	if got := node.Binding().OptionCount(); got != binding.OptionCount() {
+		t.Fatalf("Binding().OptionCount() = %d, want %d", got, binding.OptionCount())
+	}
+
+	if _, ok := node.RuntimeHandler(); !ok {
+		t.Fatalf("RuntimeHandler() ok = false, want true")
+	}
 }
 
 func TestMustNodePanicsForInvalidNode(t *testing.T) {

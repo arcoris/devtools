@@ -16,18 +16,30 @@ package command
 
 // NewNode validates spec and returns a detached Node value.
 func NewNode(spec NodeSpec) (Node, error) {
+	documentation, err := newNodeDocumentation(spec)
+	if err != nil {
+		return Node{}, err
+	}
+
+	metadata, err := newNodeMetadata(spec)
+	if err != nil {
+		return Node{}, err
+	}
+
 	node := Node{
-		kind:       spec.Kind,
-		id:         spec.ID,
-		path:       spec.Path,
-		use:        spec.Use,
-		aliases:    cloneStringSlice(spec.Aliases),
-		short:      spec.Short,
-		long:       spec.Long,
-		example:    spec.Example,
-		hidden:     spec.Hidden,
-		deprecated: spec.Deprecated,
-		children:   cloneNodes(spec.Children),
+		kind:          spec.Kind,
+		id:            spec.ID,
+		path:          spec.Path,
+		use:           spec.Use,
+		aliases:       cloneStringSlice(spec.Aliases),
+		documentation: documentation,
+		metadata:      metadata,
+		visibility:    newNodeVisibility(spec),
+		group:         spec.Group,
+		topics:        cloneTopics(spec.Topics),
+		binding:       spec.Binding,
+		handler:       spec.Handler,
+		children:      cloneNodes(spec.Children),
 	}
 
 	if err := node.Validate(); err != nil {

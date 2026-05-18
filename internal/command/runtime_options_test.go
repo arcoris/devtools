@@ -26,7 +26,7 @@ func TestRuntimeOptionsPreservesExplicitFalse(t *testing.T) {
 	t.Parallel()
 
 	options := MustRuntimeOptions(RuntimeOptionsSpec{
-		RecoverPanics: false,
+		RecoverPanics: boolPointer(false),
 	})
 
 	if options.OrDefault().RecoverPanics() {
@@ -51,8 +51,8 @@ func TestRuntimeOptionsRejectInvalid(t *testing.T) {
 	t.Parallel()
 
 	_, err := NewRuntimeOptions(RuntimeOptionsSpec{
-		RecoverPanics:     false,
-		IncludePanicStack: true,
+		RecoverPanics:     boolPointer(false),
+		IncludePanicStack: boolPointer(true),
 	})
 	if err == nil {
 		t.Fatalf("NewRuntimeOptions() returned nil error")
@@ -60,6 +60,46 @@ func TestRuntimeOptionsRejectInvalid(t *testing.T) {
 
 	if !errors.Is(err, ErrInvalidRuntime) {
 		t.Fatalf("NewRuntimeOptions() error = %v, want ErrInvalidRuntime", err)
+	}
+}
+
+// TestNewRuntimeOptionsZeroSpecDefaults verifies zero specs use ordinary
+// runtime behavior rather than explicit false bool defaults.
+func TestNewRuntimeOptionsZeroSpecDefaults(t *testing.T) {
+	t.Parallel()
+
+	options, err := NewRuntimeOptions(RuntimeOptionsSpec{})
+	if err != nil {
+		t.Fatalf("NewRuntimeOptions(zero) returned unexpected error: %v", err)
+	}
+
+	if !options.RecoverPanics() {
+		t.Fatalf("RecoverPanics() = false, want default true")
+	}
+
+	if options.IncludePanicStack() {
+		t.Fatalf("IncludePanicStack() = true, want default false")
+	}
+
+	if options.SuppressEvents() {
+		t.Fatalf("SuppressEvents() = true, want default false")
+	}
+}
+
+// TestRuntimeSpecZeroOptionsDefaults verifies zero RuntimeSpec options recover
+// panics by default after runtime construction.
+func TestRuntimeSpecZeroOptionsDefaults(t *testing.T) {
+	t.Parallel()
+
+	runtime := MustRuntime(RuntimeSpec{
+		Binding: EmptyBinding(),
+		Handler: RuntimeHandlerFunc(func(ctx context.Context, request RuntimeRequest) (Result, error) {
+			return OKResult("ok"), nil
+		}),
+	})
+
+	if !runtime.Options().RecoverPanics() {
+		t.Fatalf("RuntimeSpec zero Options did not default RecoverPanics to true")
 	}
 }
 

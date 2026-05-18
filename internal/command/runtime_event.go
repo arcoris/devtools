@@ -17,6 +17,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -90,6 +91,7 @@ func (fn RuntimeEventSinkFunc) RecordEvent(ctx context.Context, event Event) err
 // RuntimeEventCollector is an in-memory RuntimeEventSink useful for tests and
 // embedding scenarios where the caller wants to inspect emitted events.
 type RuntimeEventCollector struct {
+	mu     sync.Mutex
 	events []Event
 }
 
@@ -111,6 +113,9 @@ func (collector *RuntimeEventCollector) RecordEvent(ctx context.Context, event E
 		return err
 	}
 
+	collector.mu.Lock()
+	defer collector.mu.Unlock()
+
 	collector.events = append(collector.events, event)
 
 	return nil
@@ -121,6 +126,9 @@ func (collector *RuntimeEventCollector) Events() []Event {
 	if collector == nil {
 		return nil
 	}
+
+	collector.mu.Lock()
+	defer collector.mu.Unlock()
 
 	out := make([]Event, len(collector.events))
 	copy(out, collector.events)
@@ -134,6 +142,9 @@ func (collector *RuntimeEventCollector) Len() int {
 		return 0
 	}
 
+	collector.mu.Lock()
+	defer collector.mu.Unlock()
+
 	return len(collector.events)
 }
 
@@ -142,6 +153,9 @@ func (collector *RuntimeEventCollector) Reset() {
 	if collector == nil {
 		return
 	}
+
+	collector.mu.Lock()
+	defer collector.mu.Unlock()
 
 	collector.events = nil
 }

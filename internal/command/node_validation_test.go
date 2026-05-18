@@ -272,3 +272,64 @@ func TestNodeRejectsRootChild(t *testing.T) {
 		t.Fatalf("NewRootNode(rootChild) error = %v, want ErrInvalidNode", err)
 	}
 }
+
+func TestNodeRejectsInvalidDomainFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		spec NodeSpec
+	}{
+		{
+			name: "duplicate topics",
+			spec: NodeSpec{
+				Kind:   NodeCommand,
+				ID:     MustID("bench.run"),
+				Path:   MustPath("bench", "run"),
+				Use:    "run",
+				Topics: []Topic{MustTopic("benchmark.run"), MustTopic("benchmark.run")},
+			},
+		},
+		{
+			name: "family handler",
+			spec: NodeSpec{
+				Kind:     NodeFamily,
+				ID:       MustID("bench"),
+				Path:     MustPath("bench"),
+				Use:      "bench",
+				Handler:  runtimeTestOKHandler(),
+				Children: []Node{mustTestCommandNode(t, "bench.run")},
+			},
+		},
+		{
+			name: "deprecation conflict",
+			spec: NodeSpec{
+				Kind:       NodeCommand,
+				ID:         MustID("bench.run"),
+				Path:       MustPath("bench", "run"),
+				Use:        "run",
+				Deprecated: "old message",
+				Metadata: MustMetadata(MetadataSpec{
+					Deprecation: &DeprecationSpec{Message: "new message"},
+				}),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := NewNode(test.spec)
+			if err == nil {
+				t.Fatalf("NewNode() returned nil error")
+			}
+
+			if !errors.Is(err, ErrInvalidNode) {
+				t.Fatalf("NewNode() error = %v, want ErrInvalidNode", err)
+			}
+		})
+	}
+}

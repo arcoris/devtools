@@ -28,7 +28,7 @@ func TestRuntimeExecutePropagatesPanicWhenRecoveryDisabled(t *testing.T) {
 		Binding: runtimeTestBinding(),
 		Clock:   FixedRuntimeClock{Time: runtimeTestTime()},
 		Options: MustRuntimeOptions(RuntimeOptionsSpec{
-			RecoverPanics: false,
+			RecoverPanics: boolPointer(false),
 		}),
 		Handler: RuntimeHandlerFunc(func(ctx context.Context, request RuntimeRequest) (Result, error) {
 			panic("boom")

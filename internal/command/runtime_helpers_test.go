@@ -55,3 +55,7 @@ func runtimeTestStringOption(name string) Option {
 func runtimeTestTime() time.Time {
 	return time.Date(2026, 5, 18, 10, 0, 0, 0, time.UTC)
 }
+
+func boolPointer(value bool) *bool {
+	return &value
+}

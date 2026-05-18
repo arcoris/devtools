@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Package textvalidate provides reusable validation helpers for compact
-// machine-facing text identifiers.
+// machine-facing identifiers and bounded text values.
 package textvalidate
 
 import (
@@ -22,12 +22,26 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	// DottedKebabKeySeparator separates hierarchical machine-facing key segments.
+	DottedKebabKeySeparator = "."
+)
+
 var (
 	// ErrEmptyKebabSegment reports that a kebab-case segment is empty.
 	ErrEmptyKebabSegment = errors.New("kebab segment is empty")
 
 	// ErrInvalidKebabSegment reports that a kebab-case segment is malformed.
 	ErrInvalidKebabSegment = errors.New("kebab segment is invalid")
+
+	// ErrEmptyDottedKebabKey reports that a dotted kebab key is empty.
+	ErrEmptyDottedKebabKey = errors.New("dotted kebab key is empty")
+
+	// ErrInvalidDottedKebabKey reports that a dotted kebab key is malformed.
+	ErrInvalidDottedKebabKey = errors.New("dotted kebab key is invalid")
+
+	// ErrInvalidCompactText reports that a compact text value is malformed.
+	ErrInvalidCompactText = errors.New("compact text is invalid")
 )
 
 // ValidateKebabSegment validates one ASCII kebab-case identifier segment.

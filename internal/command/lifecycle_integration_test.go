@@ -39,12 +39,12 @@ func TestCommandLifecycleIntegrationSuccess(t *testing.T) {
 		t.Fatalf("ResolveOptionValues() returned unexpected error: %v", err)
 	}
 
-	runtime := MustRuntime(RuntimeSpec{
-		Name:      "bench-run",
-		CommandID: MustID("bench.run"),
-		Binding:   binding,
-		Clock:     FixedRuntimeClock{Time: runtimeTestTime()},
-		EventSink: collector,
+	node := MustNode(NodeSpec{
+		Kind:    NodeCommand,
+		ID:      MustID("bench.run"),
+		Path:    MustPath("bench", "run"),
+		Use:     "run",
+		Binding: binding,
 		Handler: RuntimeHandlerFunc(func(ctx context.Context, request RuntimeRequest) (Result, error) {
 			format, ok := request.Option(MustOptionName("format"))
 			if !ok || format.Name() != MustOptionName("format") || format.MustValue() != "json" {
@@ -86,6 +86,14 @@ func TestCommandLifecycleIntegrationSuccess(t *testing.T) {
 				},
 			}), nil
 		}),
+		Metadata:   MustMetadata(MetadataSpec{Owner: "devtools"}),
+		Visibility: VisibilityHidden,
+	})
+
+	runtime := MustRuntimeFromNode(RuntimeFromNodeSpec{
+		Node:      node,
+		Clock:     FixedRuntimeClock{Time: runtimeTestTime()},
+		EventSink: collector,
 	})
 
 	result, err := runtime.Execute(context.Background(), RuntimeExecutionSpec{

@@ -56,10 +56,13 @@ func TestRuntimeExecuteCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
+	collector := &RuntimeEventCollector{}
+
 	runtime := MustRuntime(RuntimeSpec{
-		Binding: runtimeTestBinding(),
-		Clock:   FixedRuntimeClock{Time: runtimeTestTime()},
-		Handler: runtimeTestOKHandler(),
+		Binding:   runtimeTestBinding(),
+		Clock:     FixedRuntimeClock{Time: runtimeTestTime()},
+		EventSink: collector,
+		Handler:   runtimeTestOKHandler(),
 	})
 
 	result, err := runtime.Execute(ctx, RuntimeExecutionSpec{
@@ -79,6 +82,12 @@ func TestRuntimeExecuteCanceledContext(t *testing.T) {
 	if !result.IsCanceled() {
 		t.Fatalf("result IsCanceled() = false, want true")
 	}
+
+	if got, want := result.RecommendedExitCode(), 130; got != want {
+		t.Fatalf("RecommendedExitCode() = %d, want %d", got, want)
+	}
+
+	assertEventKinds(t, collector.Events(), []EventKind{RuntimeEventCommandCompleted})
 }
 
 // TestRuntimeExecuteHandlerError verifies handler errors become failed results.
@@ -111,5 +120,114 @@ func TestRuntimeExecuteHandlerError(t *testing.T) {
 
 	if !result.IsFailed() {
 		t.Fatalf("result IsFailed() = false, want true")
+	}
+}
+
+func TestRuntimeExecuteClassifiesCancellationDuringHandler(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	collector := &RuntimeEventCollector{}
+
+	runtime := MustRuntime(RuntimeSpec{
+		Binding:   runtimeTestBinding(),
+		Clock:     FixedRuntimeClock{Time: runtimeTestTime()},
+		EventSink: collector,
+		Handler: RuntimeHandlerFunc(func(ctx context.Context, request RuntimeRequest) (Result, error) {
+			cancel()
+
+			return OKResult("nominally ok"), nil
+		}),
+	})
+
+	result, err := runtime.Execute(ctx, RuntimeExecutionSpec{
+		OptionValues: []OptionValue{
+			MustScalarOptionValue("format", OptionKindEnum, OptionSourceCommandLine, "json"),
+		},
+		PositionalValues: []string{"stable"},
+	})
+	if err == nil {
+		t.Fatalf("Execute() returned nil error")
+	}
+
+	if !errors.Is(err, ErrRuntimeCanceled) {
+		t.Fatalf("Execute() error = %v, want ErrRuntimeCanceled", err)
+	}
+
+	if errors.Is(err, ErrRuntimeExecution) {
+		t.Fatalf("Execute() error = %v, should not wrap ErrRuntimeExecution", err)
+	}
+
+	if !result.IsCanceled() {
+		t.Fatalf("result IsCanceled() = false, want true")
+	}
+
+	if !result.HasTiming() {
+		t.Fatalf("result HasTiming() = false, want true")
+	}
+
+	assertEventKinds(t, collector.Events(), []EventKind{
+		RuntimeEventCommandStarted,
+		RuntimeEventBindingStarted,
+		RuntimeEventBindingCompleted,
+		RuntimeEventActionStarted,
+		RuntimeEventActionCompleted,
+		RuntimeEventCommandCompleted,
+	})
+
+	events := collector.Events()
+	if got, want := events[4].Severity(), EventSeverityError; got != want {
+		t.Fatalf("action.completed Severity() = %q, want %q", got, want)
+	}
+
+	if got, want := events[5].Severity(), EventSeverityError; got != want {
+		t.Fatalf("command.completed Severity() = %q, want %q", got, want)
+	}
+
+	if events[4].HasResult() {
+		t.Fatalf("action.completed carries full result payload")
+	}
+
+	completedResult, ok := events[5].Result()
+	if !ok {
+		t.Fatalf("command.completed result missing")
+	}
+
+	if !completedResult.IsCanceled() {
+		t.Fatalf("command.completed result IsCanceled() = false, want true")
+	}
+}
+
+func TestRuntimeExecuteClassifiesHandlerContextErrorAsCanceled(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	runtime := MustRuntime(RuntimeSpec{
+		Binding: runtimeTestBinding(),
+		Clock:   FixedRuntimeClock{Time: runtimeTestTime()},
+		Handler: RuntimeHandlerFunc(func(ctx context.Context, request RuntimeRequest) (Result, error) {
+			cancel()
+
+			return Result{}, ctx.Err()
+		}),
+	})
+
+	result, err := runtime.Execute(ctx, RuntimeExecutionSpec{
+		OptionValues: []OptionValue{
+			MustScalarOptionValue("format", OptionKindEnum, OptionSourceCommandLine, "json"),
+		},
+		PositionalValues: []string{"stable"},
+	})
+	if err == nil {
+		t.Fatalf("Execute() returned nil error")
+	}
+
+	if !errors.Is(err, ErrRuntimeCanceled) {
+		t.Fatalf("Execute() error = %v, want ErrRuntimeCanceled", err)
+	}
+
+	if !result.IsCanceled() {
+		t.Fatalf("result IsCanceled() = false, want true")
 	}
 }

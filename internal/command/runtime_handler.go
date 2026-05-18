@@ -40,6 +40,13 @@ func (runtime Runtime) executeHandler(ctx context.Context, request RuntimeReques
 
 	result, err = runtime.handler.Run(ctx, request)
 
+	if cancelErr := runtimeCancellationError(ctx, err); cancelErr != nil {
+		result = runtime.mergeCanceledResult(result, request.startedAt, runtime.now(), cancelErr)
+		_ = runtime.emit(ctx, RuntimeEventActionCompleted, runtime.now(), &result, cancelErr)
+
+		return result, cancelErr
+	}
+
 	if err != nil {
 		_ = runtime.emit(ctx, RuntimeEventActionCompleted, runtime.now(), &result, err)
 

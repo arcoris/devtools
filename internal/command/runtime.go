@@ -72,6 +72,9 @@ type RuntimeSpec struct {
 	// EventSink receives lifecycle events.
 	//
 	// Nil means lifecycle events are created internally but not exported.
+	// RecordEvent failures currently fail runtime execution. This keeps audit
+	// and test observers strict by default; ordinary logging adapters should
+	// wrap their sink if they want best-effort behavior.
 	EventSink RuntimeEventSink
 
 	// Options controls runtime behavior.

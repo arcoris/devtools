@@ -26,12 +26,39 @@ const nodeExampleNotePrefix = "Example: "
 func newNodeDocumentation(spec NodeSpec) (Documentation, error) {
 	docSpec := spec.Documentation.Spec()
 
+	if spec.Short != "" && docSpec.Summary != "" {
+		short := normalizeDocumentationSingleLine(spec.Short)
+		if short != docSpec.Summary {
+			return Documentation{}, fmt.Errorf(
+				"%w: short field conflicts with documentation summary",
+				ErrInvalidNode,
+			)
+		}
+	}
+
 	if docSpec.Summary == "" {
 		docSpec.Summary = spec.Short
 	}
 
+	if spec.Long != "" && docSpec.Description != "" {
+		long := normalizeDocumentationBlock(spec.Long)
+		if long != docSpec.Description {
+			return Documentation{}, fmt.Errorf(
+				"%w: long field conflicts with documentation description",
+				ErrInvalidNode,
+			)
+		}
+	}
+
 	if docSpec.Description == "" {
 		docSpec.Description = spec.Long
+	}
+
+	if !spec.Usage.IsZero() && !docSpec.Usage.IsZero() && !usageEqual(spec.Usage, docSpec.Usage) {
+		return Documentation{}, fmt.Errorf(
+			"%w: usage field conflicts with documentation usage",
+			ErrInvalidNode,
+		)
 	}
 
 	if docSpec.Usage.IsZero() {
@@ -39,7 +66,16 @@ func newNodeDocumentation(spec NodeSpec) (Documentation, error) {
 	}
 
 	if spec.Example != "" {
-		note := nodeExampleNotePrefix + spec.Example
+		note := nodeExampleNotePrefix + normalizeDocumentationBlock(spec.Example)
+		for _, existing := range docSpec.Notes {
+			if strings.HasPrefix(existing, nodeExampleNotePrefix) && existing != note {
+				return Documentation{}, fmt.Errorf(
+					"%w: example field conflicts with documentation example note",
+					ErrInvalidNode,
+				)
+			}
+		}
+
 		if !containsNodeString(docSpec.Notes, note) {
 			docSpec.Notes = append(docSpec.Notes, note)
 		}
@@ -108,6 +144,24 @@ func containsNodeString(values []string, target string) bool {
 	}
 
 	return false
+}
+
+// usageEqual reports whether two Usage declarations contain the same lines in
+// the same declaration order.
+func usageEqual(left Usage, right Usage) bool {
+	leftLines := left.LineStrings()
+	rightLines := right.LineStrings()
+	if len(leftLines) != len(rightLines) {
+		return false
+	}
+
+	for index := range leftLines {
+		if leftLines[index] != rightLines[index] {
+			return false
+		}
+	}
+
+	return true
 }
 
 // cloneTopics returns a detached copy of topics.

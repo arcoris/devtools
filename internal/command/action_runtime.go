@@ -17,6 +17,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"strconv"
 )
 
 // RuntimeHandlerFromAction adapts a compatibility Action to the canonical
@@ -51,7 +52,9 @@ func RuntimeHandlerFromAction(action Action, node Node) RuntimeHandler {
 //
 // Positional arguments are flattened in declaration order. Bound options are
 // exposed as compact fields using the "option.<name>" key so legacy actions can
-// inspect resolved values without depending on parser-specific flags.
+// inspect resolved values without depending on parser-specific flags. List
+// values also receive non-lossy "option.<name>.count" and
+// "option.<name>.value-N" fields.
 func NewActionRequestFromRuntimeRequest(node Node, request RuntimeRequest) (ActionRequest, error) {
 	input := request.Input()
 
@@ -69,10 +72,24 @@ func NewActionRequestFromRuntimeRequest(node Node, request RuntimeRequest) (Acti
 	}
 
 	for _, value := range input.Options() {
-		fields["option."+value.Name().String()] = value.String()
+		addActionRequestOptionFields(fields, value)
 	}
 
 	return NewActionRequest(node, arguments, fields)
+}
+
+// addActionRequestOptionFields adds compact and indexed compatibility fields
+// for one bound option value.
+func addActionRequestOptionFields(fields map[string]string, value OptionValue) {
+	prefix := "option." + value.Name().String()
+	values := value.Values()
+
+	fields[prefix] = value.String()
+	fields[prefix+".count"] = strconv.Itoa(len(values))
+
+	for index, raw := range values {
+		fields[prefix+".value-"+strconv.Itoa(index)] = raw
+	}
 }
 
 // NewResultFromActionResult converts a compatibility ActionResult into the

@@ -333,3 +333,76 @@ func TestNodeRejectsInvalidDomainFields(t *testing.T) {
 		})
 	}
 }
+
+func TestNodeRejectsLegacyStructuredDocumentationConflicts(t *testing.T) {
+	t.Parallel()
+
+	base := func() NodeSpec {
+		return NodeSpec{
+			Kind: NodeCommand,
+			ID:   MustID("check"),
+			Path: MustPath("check"),
+			Use:  "check",
+		}
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*NodeSpec)
+	}{
+		{
+			name: "short summary",
+			mutate: func(spec *NodeSpec) {
+				spec.Short = "Run checks"
+				spec.Documentation = MustSummaryDocumentation("Run verification")
+			},
+		},
+		{
+			name: "long description",
+			mutate: func(spec *NodeSpec) {
+				spec.Long = "Run checks."
+				spec.Documentation = MustDocumentation(DocumentationSpec{
+					Description: "Run verification.",
+				})
+			},
+		},
+		{
+			name: "usage",
+			mutate: func(spec *NodeSpec) {
+				spec.Usage = MustSimpleUsage("check [flags]")
+				spec.Documentation = MustDocumentation(DocumentationSpec{
+					Usage: MustSimpleUsage("check <target>"),
+				})
+			},
+		},
+		{
+			name: "example",
+			mutate: func(spec *NodeSpec) {
+				spec.Example = "arcoris-tool check"
+				spec.Documentation = MustDocumentation(DocumentationSpec{
+					Notes: []string{nodeExampleNotePrefix + "arcoris-tool verify"},
+				})
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			spec := base()
+			test.mutate(&spec)
+
+			_, err := NewNode(spec)
+			if err == nil {
+				t.Fatalf("NewNode() returned nil error")
+			}
+
+			if !errors.Is(err, ErrInvalidNode) {
+				t.Fatalf("NewNode() error = %v, want ErrInvalidNode", err)
+			}
+		})
+	}
+}

@@ -79,7 +79,7 @@ func TestResolveOptionValuesRejectsUnknownOptions(t *testing.T) {
 	}
 }
 
-func TestResolveOptionValuesRejectsDuplicateSourceValues(t *testing.T) {
+func TestResolveOptionValuesRejectsScalarDuplicateSourceValues(t *testing.T) {
 	t.Parallel()
 
 	_, err := ResolveOptionValues(OptionResolutionSpec{
@@ -96,6 +96,114 @@ func TestResolveOptionValuesRejectsDuplicateSourceValues(t *testing.T) {
 	if !errors.Is(err, ErrInvalidOptionResolution) {
 		t.Fatalf("ResolveOptionValues() error = %v, want ErrInvalidOptionResolution", err)
 	}
+}
+
+func TestResolveOptionValuesMergesListDuplicateSourceValues(t *testing.T) {
+	t.Parallel()
+
+	binding := optionResolverTestBinding()
+
+	values, err := ResolveOptionValues(OptionResolutionSpec{
+		Binding: binding,
+		CommandLineValues: []OptionValue{
+			MustScalarOptionValue("output", OptionKindString, OptionSourceCommandLine, "bench.out"),
+			MustListOptionValue("package", OptionKindStringList, OptionSourceCommandLine, "./..."),
+			MustListOptionValue("pkg", OptionKindStringList, OptionSourceCommandLine, "./internal/..."),
+		},
+	})
+	if err != nil {
+		t.Fatalf("ResolveOptionValues() returned unexpected error: %v", err)
+	}
+
+	assertResolvedOptionValue(t, values[0], "format", OptionSourceDefault, []string{"text"})
+	assertResolvedOptionValue(t, values[1], "output", OptionSourceCommandLine, []string{"bench.out"})
+	assertResolvedOptionValue(t, values[2], "package", OptionSourceCommandLine, []string{"./...", "./internal/..."})
+
+	bound, err := binding.Bind(BindingValueSpec{
+		OptionValues:     values,
+		PositionalValues: []string{"smoke"},
+	})
+	if err != nil {
+		t.Fatalf("Binding.Bind(resolved values) returned unexpected error: %v", err)
+	}
+
+	packages, ok := bound.OptionByName("package")
+	if !ok {
+		t.Fatalf("package option missing")
+	}
+
+	assertOptionValueStrings(t, packages.Values(), []string{"./...", "./internal/..."})
+}
+
+func TestResolveOptionValuesRejectsScalarAliasDuplicateSourceValues(t *testing.T) {
+	t.Parallel()
+
+	_, err := ResolveOptionValues(OptionResolutionSpec{
+		Binding: optionResolverTestBinding(),
+		CommandLineValues: []OptionValue{
+			MustScalarOptionValue("format", OptionKindEnum, OptionSourceCommandLine, "text"),
+			MustScalarOptionValue("fmt", OptionKindEnum, OptionSourceCommandLine, "json"),
+		},
+	})
+	if err == nil {
+		t.Fatalf("ResolveOptionValues() returned nil error")
+	}
+
+	if !errors.Is(err, ErrInvalidOptionResolution) {
+		t.Fatalf("ResolveOptionValues() error = %v, want ErrInvalidOptionResolution", err)
+	}
+}
+
+func TestResolveOptionValuesOverridesLowerPrecedenceListValues(t *testing.T) {
+	t.Parallel()
+
+	values, err := ResolveOptionValues(OptionResolutionSpec{
+		Binding: optionResolverTestBinding(),
+		ConfigValues: []OptionValue{
+			MustListOptionValue("package", OptionKindStringList, OptionSourceConfig, "./from-config"),
+		},
+		CommandLineValues: []OptionValue{
+			MustScalarOptionValue("output", OptionKindString, OptionSourceCommandLine, "bench.out"),
+			MustListOptionValue("package", OptionKindStringList, OptionSourceCommandLine, "./..."),
+			MustListOptionValue("package", OptionKindStringList, OptionSourceCommandLine, "./internal/..."),
+		},
+	})
+	if err != nil {
+		t.Fatalf("ResolveOptionValues() returned unexpected error: %v", err)
+	}
+
+	assertResolvedOptionValue(t, values[2], "package", OptionSourceCommandLine, []string{"./...", "./internal/..."})
+}
+
+func TestResolveOptionValuesSourcePrecedenceOrder(t *testing.T) {
+	t.Parallel()
+
+	values, err := ResolveOptionValues(OptionResolutionSpec{
+		Binding: optionResolverTestBinding(),
+		InheritedValues: []OptionValue{
+			MustScalarOptionValue("output", OptionKindString, OptionSourceInherited, "inherited.out"),
+		},
+		ConfigValues: []OptionValue{
+			MustScalarOptionValue("output", OptionKindString, OptionSourceConfig, "config.out"),
+		},
+		EnvironmentValues: []OptionValue{
+			MustScalarOptionValue("output", OptionKindString, OptionSourceEnvironment, "env.out"),
+		},
+		RuntimeValues: []OptionValue{
+			MustScalarOptionValue("output", OptionKindString, OptionSourceRuntime, "runtime.out"),
+		},
+		InteractiveValues: []OptionValue{
+			MustScalarOptionValue("output", OptionKindString, OptionSourceInteractive, "interactive.out"),
+		},
+		CommandLineValues: []OptionValue{
+			MustScalarOptionValue("output", OptionKindString, OptionSourceCommandLine, "cli.out"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("ResolveOptionValues() returned unexpected error: %v", err)
+	}
+
+	assertResolvedOptionValue(t, values[1], "output", OptionSourceCommandLine, []string{"cli.out"})
 }
 
 func TestResolveOptionValuesRespectsAllowedSources(t *testing.T) {
@@ -128,6 +236,37 @@ func TestResolveOptionValuesRespectsAllowedSources(t *testing.T) {
 	}
 }
 
+func TestResolveOptionValuesEnforcesAllowedSourcesBeforeMerge(t *testing.T) {
+	t.Parallel()
+
+	binding := MustBinding(BindingSpec{
+		Options: []Option{
+			MustOption(OptionSpec{
+				Name: "package",
+				Kind: OptionKindStringList,
+				Policy: MustOptionPolicyForKind(OptionKindStringList, OptionPolicySpec{
+					AllowedSources: []OptionSource{OptionSourceConfig},
+				}),
+			}),
+		},
+	})
+
+	_, err := ResolveOptionValues(OptionResolutionSpec{
+		Binding: binding,
+		CommandLineValues: []OptionValue{
+			MustListOptionValue("package", OptionKindStringList, OptionSourceCommandLine, "./..."),
+			MustListOptionValue("package", OptionKindStringList, OptionSourceCommandLine, "./internal/..."),
+		},
+	})
+	if err == nil {
+		t.Fatalf("ResolveOptionValues() returned nil error")
+	}
+
+	if !errors.Is(err, ErrInvalidOptionResolution) {
+		t.Fatalf("ResolveOptionValues() error = %v, want ErrInvalidOptionResolution", err)
+	}
+}
+
 func optionResolverTestBinding() Binding {
 	return MustBinding(BindingSpec{
 		Options: []Option{
@@ -147,6 +286,7 @@ func optionResolverTestBinding() Binding {
 			}),
 			MustOption(OptionSpec{
 				Name:          "package",
+				Aliases:       []string{"pkg"},
 				Kind:          OptionKindStringList,
 				DefaultValues: []string{"./..."},
 			}),

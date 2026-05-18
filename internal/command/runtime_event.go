@@ -40,6 +40,15 @@ func (runtime Runtime) emit(ctx context.Context, kind EventKind, occurredAt time
 		fields["error"] = cause.Error()
 	}
 
+	if result != nil {
+		fields["result.status"] = result.Status().String()
+	}
+
+	eventResult := result
+	if !runtime.shouldAttachResultToEvent(kind) {
+		eventResult = nil
+	}
+
 	event, err := NewEvent(EventSpec{
 		Kind:       kind,
 		Severity:   severity,
@@ -47,7 +56,7 @@ func (runtime Runtime) emit(ctx context.Context, kind EventKind, occurredAt time
 		CommandID:  runtime.commandID,
 		Message:    runtime.eventMessage(kind, cause),
 		Fields:     fields,
-		Result:     result,
+		Result:     eventResult,
 		Metadata:   runtime.metadata,
 		Visibility: runtime.visibility,
 	})
@@ -55,7 +64,12 @@ func (runtime Runtime) emit(ctx context.Context, kind EventKind, occurredAt time
 		return fmt.Errorf("%w: build event %q: %w", ErrRuntimeExecution, kind, err)
 	}
 
-	if err := runtime.eventSink.RecordEvent(ctx, event); err != nil {
+	recordCtx := ctx
+	if isRuntimeCancellation(cause) {
+		recordCtx = context.WithoutCancel(ctx)
+	}
+
+	if err := runtime.eventSink.RecordEvent(recordCtx, event); err != nil {
 		return fmt.Errorf("%w: record event %q: %w", ErrRuntimeExecution, kind, err)
 	}
 
@@ -69,6 +83,13 @@ func (runtime Runtime) eventMessage(kind EventKind, cause error) string {
 	}
 
 	return fmt.Sprintf("%s.", kind)
+}
+
+// shouldAttachResultToEvent reports whether a full Result payload belongs on
+// this lifecycle event. Intermediate events carry compact fields only to avoid
+// duplicating large result payloads in event streams.
+func (runtime Runtime) shouldAttachResultToEvent(kind EventKind) bool {
+	return kind == RuntimeEventCommandCompleted
 }
 
 // RuntimeEventSink records lifecycle events.

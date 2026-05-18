@@ -30,32 +30,51 @@
 //
 // Command input is modeled by Option, Argument, OptionValue, Binding, and
 // BoundInput. Option and Argument declare what a command accepts. OptionValue
-// is already resolved runtime data with source provenance. Binding validates
-// and canonicalizes those values, applies declaration defaults, and returns
-// BoundInput. Binding does not parse CLI syntax, inspect parser state, read
-// environment variables, load configuration, or prompt users.
+// is already parsed or loaded runtime data with source provenance. Binding
+// validates and canonicalizes those values, applies declaration defaults, and
+// returns BoundInput. Binding does not parse CLI syntax, inspect parser state,
+// read environment variables, load configuration, or prompt users.
 //
 // Option resolution is a boundary before Binding. ResolveOptionValues combines
 // values supplied by command-line, interactive, runtime, environment, config,
 // inherited, and declaration-default sources. It respects OptionPolicy allowed
 // sources and OptionSource precedence, then returns canonical []OptionValue
-// suitable for Binding.Bind. Concrete loaders and parsers stay outside this
-// package.
+// suitable for Binding.Bind. Same-source duplicates are rejected for scalar
+// options. List-shaped options with multiple occurrence policy are merged in
+// source order, so adapters may pass repeated flag occurrences as separate
+// OptionValue values. Concrete loaders and parsers stay outside this package.
 //
 // Execution is modeled by Runtime, RuntimeHandler, RuntimeRequest, Result,
 // Event, and Artifact. Runtime coordinates validation, binding, lifecycle event
 // emission, handler execution, panic recovery, cancellation classification, and
 // Result normalization. RuntimeHandler is the canonical executable contract.
+// Runtime returns ErrRuntimeCanceled and ResultStatusCanceled when the context
+// is canceled before execution, after binding, during handler execution, or when
+// a handler returns a context cancellation error.
+//
 // Result is the final lifecycle output; it does not render output or terminate
 // a process. Event is an append-only lifecycle observation, not a logger or
-// telemetry exporter. Artifact is a validated reference and metadata value; it
-// does not create, delete, upload, or check files.
+// telemetry exporter. Runtime attaches full Result payloads only to final
+// command.completed events; intermediate events carry compact fields such as
+// result.status to avoid duplicating large payloads. RuntimeEventSink failures
+// fail execution by default. Best-effort logging adapters should wrap their
+// sink outside this package if they want warn-or-ignore behavior. Artifact is a
+// validated reference and metadata value; it does not create, delete, upload, or
+// check files.
 //
 // Action, ActionRequest, and ActionResult remain as a lower-level compatibility
 // adapter for older command declarations and small tests. New execution code
 // should prefer RuntimeHandler, RuntimeRequest, and Result. Use
 // RuntimeHandlerFromAction and NewResultFromActionResult when compatibility
-// actions must run through the canonical Runtime lifecycle.
+// actions must run through the canonical Runtime lifecycle. The compatibility
+// ActionRequest exposes compact option fields and indexed list-value fields,
+// but RuntimeRequest remains the lossless canonical input model.
+//
+// Node may carry Binding and RuntimeHandler to simplify future adapter wiring.
+// NewRuntimeFromNode turns such a command node into a Runtime by copying only
+// framework-neutral kernel values. Node still does not carry Cobra commands,
+// parser state, terminal rendering, output streams, filesystem storage, or
+// process-exit behavior.
 //
 // Cobra, pflag, shell syntax, terminal output, process exit mapping, config and
 // environment loaders, artifact storage, and observability exporters should

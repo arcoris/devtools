@@ -246,6 +246,35 @@ func TestNewNodeStoresStructuredDomainFields(t *testing.T) {
 	}
 }
 
+func TestNewNodeAcceptsMatchingLegacyAndStructuredDocumentation(t *testing.T) {
+	t.Parallel()
+
+	node := MustNode(NodeSpec{
+		Kind:    NodeCommand,
+		ID:      MustID("check"),
+		Path:    MustPath("check"),
+		Use:     "check",
+		Short:   "Run checks",
+		Long:    "Run configured checks.",
+		Usage:   MustSimpleUsage("check [flags]"),
+		Example: "arcoris-tool check",
+		Documentation: MustDocumentation(DocumentationSpec{
+			Summary:     "Run checks",
+			Description: "Run configured checks.",
+			Usage:       MustSimpleUsage("check [flags]"),
+			Notes:       []string{nodeExampleNotePrefix + "arcoris-tool check"},
+		}),
+	})
+
+	if got, want := node.Documentation().NoteCount(), 1; got != want {
+		t.Fatalf("Documentation().NoteCount() = %d, want %d", got, want)
+	}
+
+	if got, want := node.Example(), "arcoris-tool check"; got != want {
+		t.Fatalf("Example() = %q, want %q", got, want)
+	}
+}
+
 func TestMustNodePanicsForInvalidNode(t *testing.T) {
 	t.Parallel()
 

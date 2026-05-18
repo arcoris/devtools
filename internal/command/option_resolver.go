@@ -61,6 +61,11 @@ type OptionResolutionSpec struct {
 // Binding declarations, OptionPolicy allowed sources, and default source
 // precedence.
 //
+// Same-source duplicate values are rejected for scalar options. List-shaped
+// options whose policy allows multiple occurrences are merged in source order
+// and revalidated against the declaration. Higher-precedence sources still
+// override lower-precedence sources for the same option.
+//
 // The returned values are suitable for Binding.Bind. They are ordered by the
 // Binding option declaration order. Declaration defaults are included when no
 // higher-precedence value exists and the option policy allows the default
@@ -156,12 +161,20 @@ func (resolver *optionResolver) addValues(expectedSource OptionSource, values []
 
 		existing, exists := resolver.resolved[option.Name()]
 		if exists && existing.Source() == canonical.Source() {
-			return fmt.Errorf(
-				"%w: duplicate %s value for option %q",
-				ErrInvalidOptionResolution,
-				expectedSource,
-				option.Name(),
-			)
+			merged, err := mergeSameSourceOptionValues(option, existing, canonical)
+			if err != nil {
+				return fmt.Errorf(
+					"%w: duplicate %s value for option %q: %w",
+					ErrInvalidOptionResolution,
+					expectedSource,
+					option.Name(),
+					err,
+				)
+			}
+
+			resolver.resolved[option.Name()] = merged
+
+			continue
 		}
 
 		if !exists || canonical.Source().Overrides(existing.Source()) {
@@ -198,4 +211,32 @@ func (resolver optionResolver) values() ([]OptionValue, error) {
 	}
 
 	return resolved, nil
+}
+
+// mergeSameSourceOptionValues merges repeatable list-shaped values from one
+// source. Scalar values remain single-occurrence and are rejected.
+func mergeSameSourceOptionValues(option Option, existing OptionValue, next OptionValue) (OptionValue, error) {
+	if !optionAllowsSameSourceMerge(option) {
+		return OptionValue{}, fmt.Errorf(
+			"option kind %q with occurrence %q does not allow same-source duplicates",
+			option.Kind(),
+			option.Policy().Occurrence(),
+		)
+	}
+
+	values := existing.Values()
+	values = append(values, next.Values()...)
+
+	merged, err := NewOptionValueFromOption(option, existing.Source(), values...)
+	if err != nil {
+		return OptionValue{}, err
+	}
+
+	return merged, nil
+}
+
+// optionAllowsSameSourceMerge reports whether the option can represent repeated
+// same-source occurrences without losing data.
+func optionAllowsSameSourceMerge(option Option) bool {
+	return option.Kind().IsList() && option.IsRepeatable()
 }

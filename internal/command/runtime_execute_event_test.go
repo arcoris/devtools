@@ -78,3 +78,54 @@ func TestRuntimeSuppressEvents(t *testing.T) {
 		t.Fatalf("collector Len() = %d, want %d", got, want)
 	}
 }
+
+// TestRuntimeEventResultPayloadPolicy verifies full Result payloads are only
+// attached to final lifecycle events.
+func TestRuntimeEventResultPayloadPolicy(t *testing.T) {
+	t.Parallel()
+
+	collector := &RuntimeEventCollector{}
+
+	runtime := MustRuntime(RuntimeSpec{
+		Binding:   runtimeTestBinding(),
+		Clock:     FixedRuntimeClock{Time: runtimeTestTime()},
+		EventSink: collector,
+		Handler:   runtimeTestOKHandler(),
+	})
+
+	_, err := runtime.Execute(context.Background(), RuntimeExecutionSpec{
+		OptionValues: []OptionValue{
+			MustScalarOptionValue("format", OptionKindEnum, OptionSourceCommandLine, "json"),
+		},
+		PositionalValues: []string{"stable"},
+	})
+	if err != nil {
+		t.Fatalf("Execute() returned unexpected error: %v", err)
+	}
+
+	events := collector.Events()
+	if got, want := events[4].Kind(), RuntimeEventActionCompleted; got != want {
+		t.Fatalf("event 4 kind = %q, want %q", got, want)
+	}
+
+	if events[4].HasResult() {
+		t.Fatalf("action.completed carries full result payload")
+	}
+
+	if got, ok := events[4].Field("result.status"); !ok || got != ResultStatusOK.String() {
+		t.Fatalf("action.completed result.status = %q, %v; want ok", got, ok)
+	}
+
+	if got, want := events[5].Kind(), RuntimeEventCommandCompleted; got != want {
+		t.Fatalf("event 5 kind = %q, want %q", got, want)
+	}
+
+	result, ok := events[5].Result()
+	if !ok {
+		t.Fatalf("command.completed result missing")
+	}
+
+	if !result.IsOK() {
+		t.Fatalf("command.completed result IsOK() = false, want true")
+	}
+}

@@ -37,6 +37,14 @@ func (runtime Runtime) Execute(ctx context.Context, spec RuntimeExecutionSpec) (
 
 	startedAt := runtime.now()
 
+	if err := runtimeCancellationError(ctx, nil); err != nil {
+		finishedAt := runtime.now()
+		result := runtime.canceledResult(startedAt, finishedAt, err)
+		_ = runtime.emit(ctx, RuntimeEventCommandCompleted, finishedAt, &result, err)
+
+		return result, err
+	}
+
 	if err := runtime.emit(ctx, RuntimeEventCommandStarted, startedAt, nil, nil); err != nil {
 		return Result{}, err
 	}
@@ -49,11 +57,12 @@ func (runtime Runtime) Execute(ctx context.Context, spec RuntimeExecutionSpec) (
 		return result, err
 	}
 
-	if err := ctx.Err(); err != nil {
-		result := runtime.canceledResult(startedAt, runtime.now(), err)
-		_ = runtime.emit(ctx, RuntimeEventCommandCompleted, runtime.now(), &result, err)
+	if err := runtimeCancellationError(ctx, nil); err != nil {
+		finishedAt := runtime.now()
+		result := runtime.canceledResult(startedAt, finishedAt, err)
+		_ = runtime.emit(ctx, RuntimeEventCommandCompleted, finishedAt, &result, err)
 
-		return result, fmt.Errorf("%w: %w", ErrRuntimeCanceled, err)
+		return result, err
 	}
 
 	request := RuntimeRequest{
@@ -69,6 +78,13 @@ func (runtime Runtime) Execute(ctx context.Context, spec RuntimeExecutionSpec) (
 	finishedAt := runtime.now()
 
 	if err != nil {
+		if isRuntimeCancellation(err) {
+			result = runtime.mergeCanceledResult(result, startedAt, finishedAt, err)
+			_ = runtime.emit(ctx, RuntimeEventCommandCompleted, finishedAt, &result, err)
+
+			return result, err
+		}
+
 		result = runtime.mergeFailureResult(result, startedAt, finishedAt, err)
 		_ = runtime.emit(ctx, RuntimeEventCommandCompleted, finishedAt, &result, err)
 

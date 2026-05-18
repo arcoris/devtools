@@ -90,6 +90,46 @@ func TestRuntimeHandlerFromActionAdaptsToCanonicalResult(t *testing.T) {
 	}
 }
 
+func TestRuntimeHandlerFromActionExposesListOptionFields(t *testing.T) {
+	t.Parallel()
+
+	node := mustTestCommandNode(t, "bench.run")
+
+	runtime := MustRuntime(RuntimeSpec{
+		Name:      "bench-runtime",
+		CommandID: node.ID(),
+		Binding:   optionResolverTestBinding(),
+		Clock:     FixedRuntimeClock{Time: runtimeTestTime()},
+		Handler: RuntimeHandlerFromAction(ActionFunc(func(ctx context.Context, request ActionRequest) (ActionResult, error) {
+			tests := map[string]string{
+				"option.package":         "./...,./internal/...",
+				"option.package.count":   "2",
+				"option.package.value-0": "./...",
+				"option.package.value-1": "./internal/...",
+			}
+
+			for key, want := range tests {
+				if got, ok := request.Field(key); !ok || got != want {
+					t.Fatalf("Field(%q) = %q, %v; want %q", key, got, ok, want)
+				}
+			}
+
+			return ActionResult{Message: "ok"}, nil
+		}), node),
+	})
+
+	_, err := runtime.Execute(context.Background(), RuntimeExecutionSpec{
+		OptionValues: []OptionValue{
+			MustScalarOptionValue("output", OptionKindString, OptionSourceCommandLine, "bench.out"),
+			MustListOptionValue("package", OptionKindStringList, OptionSourceCommandLine, "./...", "./internal/..."),
+		},
+		PositionalValues: []string{"smoke"},
+	})
+	if err != nil {
+		t.Fatalf("Execute() returned unexpected error: %v", err)
+	}
+}
+
 func TestResultStatusFromActionStatus(t *testing.T) {
 	t.Parallel()
 

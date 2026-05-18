@@ -135,9 +135,9 @@ type OptionSpec struct {
 //   - DefaultValues and AllowedValues: declaration-level value constraints;
 //   - Documentation, Metadata, Visibility: presentation and lifecycle metadata.
 //
-// Resolved values are intentionally not modeled here. A future resolution layer
-// should combine Option, OptionSource, parser input, defaults, config,
-// environment, and validation into a separate resolved-value type.
+// Resolved values are intentionally not modeled here. ResolveOptionValues
+// combines Option declarations with already parsed/loaded OptionValue inputs
+// from adapters before Binding validates canonical invocation input.
 type Option struct {
 	// name stores the canonical stable long option name.
 	name OptionName

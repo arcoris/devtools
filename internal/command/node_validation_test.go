@@ -334,6 +334,33 @@ func TestNodeRejectsInvalidDomainFields(t *testing.T) {
 	}
 }
 
+func TestNodeWrapsBindingValidationErrors(t *testing.T) {
+	t.Parallel()
+
+	option := MustOption(OptionSpec{Name: "format", Kind: OptionKindString})
+
+	_, err := NewNode(NodeSpec{
+		Kind: NodeCommand,
+		ID:   MustID("check"),
+		Path: MustPath("check"),
+		Use:  "check",
+		Binding: Binding{
+			options: []Option{option, option},
+		},
+	})
+	if err == nil {
+		t.Fatalf("NewNode() returned nil error")
+	}
+
+	if !errors.Is(err, ErrInvalidNode) {
+		t.Fatalf("NewNode() error = %v, want ErrInvalidNode", err)
+	}
+
+	if !errors.Is(err, ErrInvalidBinding) {
+		t.Fatalf("NewNode() error = %v, want ErrInvalidBinding", err)
+	}
+}
+
 func TestNodeRejectsLegacyStructuredDocumentationConflicts(t *testing.T) {
 	t.Parallel()
 

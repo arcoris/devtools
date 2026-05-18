@@ -106,6 +106,34 @@ func TestRuntimeEventCollectorConcurrentRecord(t *testing.T) {
 	if got, want := collector.Len(), goroutines*perGoroutine; got != want {
 		t.Fatalf("Len() = %d, want %d", got, want)
 	}
+
+	collector.Reset()
+
+	if got, want := collector.Len(), 0; got != want {
+		t.Fatalf("Len() after Reset() = %d, want %d", got, want)
+	}
+}
+
+func TestRuntimeEventCollectorRejectsCanceledContext(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	collector := &RuntimeEventCollector{}
+
+	err := collector.RecordEvent(ctx, MustSimpleEvent(EventKindDiagnostic, "diagnostic"))
+	if err == nil {
+		t.Fatalf("RecordEvent() returned nil error")
+	}
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("RecordEvent() error = %v, want context.Canceled", err)
+	}
+
+	if got, want := collector.Len(), 0; got != want {
+		t.Fatalf("Len() = %d, want %d", got, want)
+	}
 }
 
 // TestRuntimeEventSinkFuncNil verifies nil event sink function behavior.

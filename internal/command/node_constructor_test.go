@@ -275,6 +275,91 @@ func TestNewNodeAcceptsMatchingLegacyAndStructuredDocumentation(t *testing.T) {
 	}
 }
 
+func TestNewNodeAcceptsMatchingLegacyAndStructuredDocumentationAfterNormalization(t *testing.T) {
+	t.Parallel()
+
+	node := MustNode(NodeSpec{
+		Kind:  NodeCommand,
+		ID:    MustID("check"),
+		Path:  MustPath("check"),
+		Use:   "check",
+		Short: "  Run\tchecks  ",
+		Long:  "\nRun configured checks.\r\n\nUse cache when available.\n",
+		Documentation: MustDocumentation(DocumentationSpec{
+			Summary:     "Run checks",
+			Description: "Run configured checks.\n\nUse cache when available.",
+		}),
+	})
+
+	if got, want := node.Short(), "Run checks"; got != want {
+		t.Fatalf("Short() = %q, want %q", got, want)
+	}
+
+	if got, want := node.Long(), "Run configured checks.\n\nUse cache when available."; got != want {
+		t.Fatalf("Long() = %q, want %q", got, want)
+	}
+}
+
+func TestNewNodeHiddenVisibilityCompatibilityPolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		hidden     bool
+		visibility Visibility
+		want       Visibility
+	}{
+		{name: "legacy hidden maps to hidden", hidden: true, want: VisibilityHidden},
+		{name: "legacy visible maps to public", want: VisibilityPublic},
+		{name: "explicit visibility wins over hidden", hidden: true, visibility: VisibilityInternal, want: VisibilityInternal},
+		{name: "explicit public wins over hidden", hidden: true, visibility: VisibilityPublic, want: VisibilityPublic},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			node := MustNode(NodeSpec{
+				Kind:       NodeCommand,
+				ID:         MustID("check"),
+				Path:       MustPath("check"),
+				Use:        "check",
+				Hidden:     test.hidden,
+				Visibility: test.visibility,
+			})
+
+			if got := node.Visibility(); got != test.want {
+				t.Fatalf("Visibility() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestNewNodeAcceptsMatchingLegacyAndStructuredDeprecation(t *testing.T) {
+	t.Parallel()
+
+	node := MustNode(NodeSpec{
+		Kind:       NodeCommand,
+		ID:         MustID("check"),
+		Path:       MustPath("check"),
+		Use:        "check",
+		Deprecated: "use verify",
+		Metadata: MustMetadata(MetadataSpec{
+			Deprecation: &DeprecationSpec{Message: "use verify"},
+		}),
+	})
+
+	if got, want := node.Deprecated(), "use verify"; got != want {
+		t.Fatalf("Deprecated() = %q, want %q", got, want)
+	}
+
+	if !node.Metadata().IsDeprecated() {
+		t.Fatalf("Metadata().IsDeprecated() = false, want true")
+	}
+}
+
 func TestMustNodePanicsForInvalidNode(t *testing.T) {
 	t.Parallel()
 

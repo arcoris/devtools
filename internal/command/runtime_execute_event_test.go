@@ -120,6 +120,10 @@ func TestRuntimeEventResultPayloadPolicy(t *testing.T) {
 		t.Fatalf("event 5 kind = %q, want %q", got, want)
 	}
 
+	if got, ok := events[5].Field("result.status"); !ok || got != ResultStatusOK.String() {
+		t.Fatalf("command.completed result.status = %q, %v; want ok", got, ok)
+	}
+
 	result, ok := events[5].Result()
 	if !ok {
 		t.Fatalf("command.completed result missing")

@@ -42,6 +42,14 @@ func TestRuntimeHandlerFromActionAdaptsToCanonicalResult(t *testing.T) {
 				t.Fatalf("ActionRequest option.format = %q, %v; want json", got, ok)
 			}
 
+			if got, ok := request.Field("option.format.count"); !ok || got != "1" {
+				t.Fatalf("ActionRequest option.format.count = %q, %v; want 1", got, ok)
+			}
+
+			if got, ok := request.Field("option.format.value-0"); !ok || got != "json" {
+				t.Fatalf("ActionRequest option.format.value-0 = %q, %v; want json", got, ok)
+			}
+
 			return ActionResult{
 				Status:  ActionStatusOK,
 				Message: "action completed",

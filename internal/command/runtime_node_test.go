@@ -70,6 +70,19 @@ func TestNewRuntimeFromNodeCreatesExecutableRuntime(t *testing.T) {
 	}
 }
 
+func TestNewRuntimeFromNodeAllowsNameOverride(t *testing.T) {
+	t.Parallel()
+
+	runtime := MustRuntimeFromNode(RuntimeFromNodeSpec{
+		Name: "bench-runtime",
+		Node: runtimeNodeTestCommandNode(),
+	})
+
+	if got, want := runtime.Name(), "bench-runtime"; got != want {
+		t.Fatalf("Name() = %q, want %q", got, want)
+	}
+}
+
 func TestNewRuntimeFromNodeRejectsNonCommandNodes(t *testing.T) {
 	t.Parallel()
 
@@ -108,6 +121,23 @@ func TestNewRuntimeFromNodeRejectsNonCommandNodes(t *testing.T) {
 				t.Fatalf("NewRuntimeFromNode() error = %v, want ErrInvalidNode", err)
 			}
 		})
+	}
+}
+
+func TestNewRuntimeFromNodeRejectsInvalidNode(t *testing.T) {
+	t.Parallel()
+
+	_, err := NewRuntimeFromNode(RuntimeFromNodeSpec{})
+	if err == nil {
+		t.Fatalf("NewRuntimeFromNode() returned nil error")
+	}
+
+	if !errors.Is(err, ErrInvalidRuntime) {
+		t.Fatalf("NewRuntimeFromNode() error = %v, want ErrInvalidRuntime", err)
+	}
+
+	if !errors.Is(err, ErrInvalidNode) {
+		t.Fatalf("NewRuntimeFromNode() error = %v, want ErrInvalidNode", err)
 	}
 }
 

@@ -17,7 +17,9 @@ package command
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 )
 
 // TestRuntimeExecuteBindingFailure verifies binding errors become failed results.
@@ -88,6 +90,55 @@ func TestRuntimeExecuteCanceledContext(t *testing.T) {
 	}
 
 	assertEventKinds(t, collector.Events(), []EventKind{RuntimeEventCommandCompleted})
+}
+
+func TestRuntimeExecuteDeadlineExceededBeforeStart(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+
+	collector := &RuntimeEventCollector{}
+
+	runtime := MustRuntime(RuntimeSpec{
+		Binding:   runtimeTestBinding(),
+		Clock:     FixedRuntimeClock{Time: runtimeTestTime()},
+		EventSink: collector,
+		Handler:   runtimeTestOKHandler(),
+	})
+
+	result, err := runtime.Execute(ctx, RuntimeExecutionSpec{
+		OptionValues: []OptionValue{
+			MustScalarOptionValue("format", OptionKindEnum, OptionSourceCommandLine, "json"),
+		},
+		PositionalValues: []string{"stable"},
+	})
+	if err == nil {
+		t.Fatalf("Execute() returned nil error")
+	}
+
+	if !errors.Is(err, ErrRuntimeCanceled) {
+		t.Fatalf("Execute() error = %v, want ErrRuntimeCanceled", err)
+	}
+
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Execute() error = %v, want context.DeadlineExceeded", err)
+	}
+
+	if !result.IsCanceled() {
+		t.Fatalf("result IsCanceled() = false, want true")
+	}
+
+	events := collector.Events()
+	assertEventKinds(t, events, []EventKind{RuntimeEventCommandCompleted})
+
+	if got, ok := events[0].Field("result.status"); !ok || got != ResultStatusCanceled.String() {
+		t.Fatalf("command.completed result.status = %q, %v; want canceled", got, ok)
+	}
+
+	if _, ok := events[0].Result(); !ok {
+		t.Fatalf("command.completed result missing")
+	}
 }
 
 // TestRuntimeExecuteHandlerError verifies handler errors become failed results.
@@ -229,5 +280,147 @@ func TestRuntimeExecuteClassifiesHandlerContextErrorAsCanceled(t *testing.T) {
 
 	if !result.IsCanceled() {
 		t.Fatalf("result IsCanceled() = false, want true")
+	}
+}
+
+func TestRuntimeExecuteClassifiesWrappedContextCanceledAsCanceled(t *testing.T) {
+	t.Parallel()
+
+	runtime := MustRuntime(RuntimeSpec{
+		Binding: runtimeTestBinding(),
+		Clock:   FixedRuntimeClock{Time: runtimeTestTime()},
+		Handler: RuntimeHandlerFunc(func(ctx context.Context, request RuntimeRequest) (Result, error) {
+			return Result{}, fmt.Errorf("handler stopped: %w", context.Canceled)
+		}),
+	})
+
+	result, err := runtime.Execute(context.Background(), RuntimeExecutionSpec{
+		OptionValues: []OptionValue{
+			MustScalarOptionValue("format", OptionKindEnum, OptionSourceCommandLine, "json"),
+		},
+		PositionalValues: []string{"stable"},
+	})
+	if err == nil {
+		t.Fatalf("Execute() returned nil error")
+	}
+
+	if !errors.Is(err, ErrRuntimeCanceled) {
+		t.Fatalf("Execute() error = %v, want ErrRuntimeCanceled", err)
+	}
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("Execute() error = %v, want context.Canceled", err)
+	}
+
+	if errors.Is(err, ErrRuntimeExecution) {
+		t.Fatalf("Execute() error = %v, should not wrap ErrRuntimeExecution", err)
+	}
+
+	if !result.IsCanceled() {
+		t.Fatalf("result IsCanceled() = false, want true")
+	}
+}
+
+func TestRuntimeExecuteClassifiesHandlerDeadlineExceededAsCanceled(t *testing.T) {
+	t.Parallel()
+
+	runtime := MustRuntime(RuntimeSpec{
+		Binding: runtimeTestBinding(),
+		Clock:   FixedRuntimeClock{Time: runtimeTestTime()},
+		Handler: RuntimeHandlerFunc(func(ctx context.Context, request RuntimeRequest) (Result, error) {
+			return Result{}, context.DeadlineExceeded
+		}),
+	})
+
+	result, err := runtime.Execute(context.Background(), RuntimeExecutionSpec{
+		OptionValues: []OptionValue{
+			MustScalarOptionValue("format", OptionKindEnum, OptionSourceCommandLine, "json"),
+		},
+		PositionalValues: []string{"stable"},
+	})
+	if err == nil {
+		t.Fatalf("Execute() returned nil error")
+	}
+
+	if !errors.Is(err, ErrRuntimeCanceled) {
+		t.Fatalf("Execute() error = %v, want ErrRuntimeCanceled", err)
+	}
+
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Execute() error = %v, want context.DeadlineExceeded", err)
+	}
+
+	if !result.IsCanceled() {
+		t.Fatalf("result IsCanceled() = false, want true")
+	}
+}
+
+func TestRuntimeExecuteCanceledPartialResultPreservesArtifactsAndWarnings(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	collector := &RuntimeEventCollector{}
+
+	runtime := MustRuntime(RuntimeSpec{
+		Binding:   runtimeTestBinding(),
+		Clock:     FixedRuntimeClock{Time: runtimeTestTime()},
+		EventSink: collector,
+		Handler: RuntimeHandlerFunc(func(ctx context.Context, request RuntimeRequest) (Result, error) {
+			cancel()
+
+			return MustResult(ResultSpec{
+				Status:  ResultStatusOK,
+				Message: "partial",
+				Artifacts: []Artifact{
+					resultTestArtifact("bench.report"),
+				},
+				Warnings: []ResultWarning{
+					MustResultWarning(ResultWarningSpec{
+						Kind:    "partial",
+						Message: "partial output is available",
+					}),
+				},
+			}), nil
+		}),
+	})
+
+	result, err := runtime.Execute(ctx, RuntimeExecutionSpec{
+		OptionValues: []OptionValue{
+			MustScalarOptionValue("format", OptionKindEnum, OptionSourceCommandLine, "json"),
+		},
+		PositionalValues: []string{"stable"},
+	})
+	if err == nil {
+		t.Fatalf("Execute() returned nil error")
+	}
+
+	if !errors.Is(err, ErrRuntimeCanceled) {
+		t.Fatalf("Execute() error = %v, want ErrRuntimeCanceled", err)
+	}
+
+	if !result.IsCanceled() {
+		t.Fatalf("result IsCanceled() = false, want true")
+	}
+
+	if got, want := len(result.Artifacts()), 1; got != want {
+		t.Fatalf("len(Artifacts()) = %d, want %d", got, want)
+	}
+
+	if got, want := result.WarningCount(), 1; got != want {
+		t.Fatalf("WarningCount() = %d, want %d", got, want)
+	}
+
+	events := collector.Events()
+	completedResult, ok := events[len(events)-1].Result()
+	if !ok {
+		t.Fatalf("command.completed result missing")
+	}
+
+	if got, want := len(completedResult.Artifacts()), 1; got != want {
+		t.Fatalf("command.completed artifact count = %d, want %d", got, want)
+	}
+
+	if got, want := completedResult.WarningCount(), 1; got != want {
+		t.Fatalf("command.completed warning count = %d, want %d", got, want)
 	}
 }

@@ -12,48 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Go build artifacts
-/bin/
-/dist/
-*.test
-*.out
-*.prof
-*.pprof
-*.trace
-coverage.out
-
-# Benchmark and profiling artifacts
-/bench/raw/**
-/bench/compare/**
-/bench/profiles/**
-/bench/coverage/**
-/bench/reports/**
-
-!/bench/**/.gitkeep
-!/bench/README.md
-!/bench/.gitignore
-
-# Perf artifacts
-perf.data
-perf.data.old
-
-# Local tool/cache state
-/.arcoris/
-/.tmp/
-/.cache/
-
-# Editor/IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-.idea/
-bench/raw/**/*
-bench/compare/**/*
-bench/profiles/**/*
-bench/coverage/**/*
-bench/reports/**/*
+name: Reusable Workflow Consumer

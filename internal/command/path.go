@@ -390,6 +390,11 @@ func (path Path) TrimPrefix(prefix Path) (Path, bool) {
 	return Path{segments: cloneStringSlice(rest)}, true
 }
 
+// clone returns a detached copy of path.
+func (path Path) clone() Path {
+	return Path{segments: cloneStringSlice(path.segments)}
+}
+
 // Validate verifies that the path satisfies the command path grammar.
 //
 // The root path is valid.
@@ -476,6 +481,20 @@ func cloneStringSlice(values []string) []string {
 
 	out := make([]string, len(values))
 	copy(out, values)
+
+	return out
+}
+
+// clonePaths returns a detached copy of path values and their segment slices.
+func clonePaths(paths []Path) []Path {
+	if paths == nil {
+		return nil
+	}
+
+	out := make([]Path, len(paths))
+	for index, path := range paths {
+		out[index] = path.clone()
+	}
 
 	return out
 }
